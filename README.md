@@ -5,6 +5,9 @@ Trial class booking system for Ottodot — online science & math classes for kid
 ## How to Run
 
 ```bash
+# Copy environment config
+cp sample.env .env
+
 # Install dependencies
 npm install
 
