@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ──────────────────────────────────────────────
+
+enum TrialClassStatus {
+  UPCOMING
+  FULL
+  CANCELLED
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  PAYMENT_FAILED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  SUCCESS
+  FAILED
+}
+
+// ── Models ─────────────────────────────────────────────
+
+model Parent {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  createdAt DateTime  @default(now())
+  students  Student[]
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  parentId    String
+  parent      Parent   @relation(fields: [parentId], references: [id])
+  name        String
+  dateOfBirth DateTime
+  bookings    Booking[]
+}
+
+model TrialClass {
+  id          String            @id @default(cuid())
+  subject     String
+  topic       String
+  teacher     String
+  scheduledAt DateTime
+  maxSeats    Int               @default(4)
+  status      TrialClassStatus  @default(UPCOMING)
+  bookings    Booking[]
+}
+
+model Booking {
+  id            String          @id @default(cuid())
+  studentId     String
+  trialClassId  String
+  status        BookingStatus   @default(PENDING_PAYMENT)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  student       Student         @relation(fields: [studentId], references: [id])
+  trialClass    TrialClass      @relation(fields: [trialClassId], references: [id])
+  paymentAttempts PaymentAttempt[]
+
+  // Partial unique index (only for CONFIRMED) is in migration SQL
+  @@index([studentId, trialClassId])
+}
+
+model PaymentAttempt {
+  id          String        @id @default(cuid())
+  bookingId   String
+  booking     Booking       @relation(fields: [bookingId], references: [id])
+  amount      Decimal
+  status      PaymentStatus
+  attemptedAt DateTime      @default(now())
+}
