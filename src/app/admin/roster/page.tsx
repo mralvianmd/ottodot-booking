@@ -45,6 +45,7 @@ export default function AdminRosterPage() {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState("empty");
+  const [refreshing, setRefreshing] = useState(false);
   // Use static scenario list
   const scenarios = SCENARIOS;
 
@@ -105,6 +106,27 @@ export default function AdminRosterPage() {
     }
   };
 
+  const handleRefreshAll = async () => {
+    setRefreshing(true);
+    try {
+      await fetchClasses();
+      if (selectedClassId) {
+        const detailRes = await fetch(`/api/classes/${selectedClassId}`);
+        if (detailRes.ok) {
+          const detail = await detailRes.json();
+          setSelectedClassDetail(detail);
+          setRoster(detail.roster || []);
+        }
+        const rosterRes = await fetch(`/api/classes/${selectedClassId}/roster`);
+        if (rosterRes.ok) {
+          setRoster(await rosterRes.json());
+        }
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleReset = async () => {
     if (!selectedClassId) return;
     setActionLoading(true);
@@ -143,12 +165,23 @@ export default function AdminRosterPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
-      <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-        Admin: Class Roster
-      </h1>
-      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-        View all students per trial class.
-      </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+            Admin: Class Roster
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            View all students per trial class.
+          </p>
+        </div>
+        <button
+          onClick={handleRefreshAll}
+          disabled={refreshing}
+          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </button>
+      </div>
 
       {/* Available classes */}
       <div className="mt-8">
@@ -345,7 +378,13 @@ export default function AdminRosterPage() {
                       {entry.parentName}
                     </td>
                     <td className="py-2 text-zinc-500 dark:text-zinc-400">
-                      {new Date(entry.bookedAt).toLocaleDateString("en-US")}
+                      {new Date(entry.bookedAt).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })}
                     </td>
                     <td className="py-2">
                       <span

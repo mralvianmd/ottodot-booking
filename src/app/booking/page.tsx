@@ -33,6 +33,22 @@ interface BookingResult {
   createdAt: string;
 }
 
+interface PendingBooking {
+  id: string;
+  studentId: string;
+  trialClassId: string;
+  status: string;
+  createdAt: string;
+  trialClass: {
+    id: string;
+    subject: string;
+    topic: string;
+    teacher: string;
+    scheduledAt: string;
+    maxSeats: number;
+  };
+}
+
 export default function BookingPage() {
   const [parents, setParents] = useState<Parent[]>([]);
   const [selectedParentId, setSelectedParentId] = useState("");
@@ -41,6 +57,9 @@ export default function BookingPage() {
   const [classes, setClasses] = useState<TrialClass[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [pendingBookings, setPendingBookings] = useState<PendingBooking[]>([]);
+
+  const [refreshing, setRefreshing] = useState(false);
 
   // Booking flow state
   const [booking, setBooking] = useState<BookingResult | null>(null);
@@ -71,6 +90,32 @@ export default function BookingPage() {
   useEffect(() => {
     fetchClasses();
   }, [fetchClasses]);
+
+  const handleStudentChange = (studentId: string) => {
+    setSelectedStudentId(studentId);
+    setBooking(null);
+    setFinalStatus(null);
+    setError("");
+    setPendingBookings([]);
+    if (studentId) {
+      fetch(`/api/students/${studentId}/pending-bookings`)
+        .then((r) => r.ok ? r.json() : [])
+        .then(setPendingBookings)
+        .catch(() => setPendingBookings([]));
+    }
+  };
+
+  const handleContinuePayment = (pb: PendingBooking) => {
+    setBooking({
+      id: pb.id,
+      studentId: pb.studentId,
+      trialClassId: pb.trialClassId,
+      status: pb.status,
+      createdAt: pb.createdAt,
+    });
+    setFinalStatus(null);
+    setError("");
+  };
 
   // Fetch students when parent changes
   const handleParentChange = async (parentId: string) => {
@@ -151,6 +196,19 @@ export default function BookingPage() {
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchClasses();
+      if (selectedStudentId) {
+        const res = await fetch(`/api/students/${selectedStudentId}/pending-bookings`);
+        if (res.ok) setPendingBookings(await res.json());
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleReset = () => {
     setBooking(null);
     setFinalStatus(null);
@@ -159,12 +217,23 @@ export default function BookingPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
-      <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-        Book a Trial Class
-      </h1>
-      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-        Demo mode — select a parent to simulate the booking flow.
-      </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+            Book a Trial Class
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            Demo mode — select a parent to simulate the booking flow.
+          </p>
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </button>
+      </div>
 
       {/* Parent selector */}
       <div className="mt-8">
@@ -195,12 +264,7 @@ export default function BookingPage() {
             {students.map((s) => (
               <button
                 key={s.id}
-                onClick={() => {
-                  setSelectedStudentId(s.id);
-                  setBooking(null);
-                  setFinalStatus(null);
-                  setError("");
-                }}
+                onClick={() => handleStudentChange(s.id)}
                 className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
                   selectedStudentId === s.id
                     ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950 dark:text-blue-300"
@@ -218,6 +282,51 @@ export default function BookingPage() {
       {error && (
         <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
           {error}
+        </div>
+      )}
+
+      {/* Pending bookings — continue payment */}
+      {selectedStudentId && pendingBookings.length > 0 && !booking && !finalStatus && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-amber-700 dark:text-amber-400">
+            Unpaid Bookings
+          </h2>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            These classes were booked but not yet paid. Continue payment to confirm.
+          </p>
+          <div className="mt-4 space-y-3">
+            {pendingBookings.map((pb) => (
+              <div
+                key={pb.id}
+                className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-800 dark:bg-amber-950"
+              >
+                <div>
+                  <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {pb.trialClass.subject} — {pb.trialClass.topic}
+                  </p>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    {pb.trialClass.teacher} &middot;{" "}
+                    {new Date(pb.trialClass.scheduledAt).toLocaleDateString("en-US", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                    Pending payment since {new Date(pb.createdAt).toLocaleDateString("en-US")}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleContinuePayment(pb)}
+                  className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600"
+                >
+                  Continue Payment
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

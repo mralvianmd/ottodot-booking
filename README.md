@@ -26,8 +26,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## What I Built
 
 - **Trial booking system** for Ottodot (online science/math classes for kids)
-- **Parent flow**: select parent → select child → pick available class → book → mock payment → see status
-- **Admin flow**: view trial class roster with confirmed students and seat counts
+- **Parent flow**: select parent → select child → see unpaid bookings (Continue Payment) → pick available class → book → mock payment → see status
+- **Admin flow**: view trial class roster (all statuses), reset/simulate classes, split available vs full class views
 - **All edge cases handled**:
   - Duplicate booking prevention (same student + same class)
   - Overbooking prevention (max 4 students per class)
@@ -65,7 +65,7 @@ Parent 1──* Student 1──* Booking *──1 TrialClass
 ```
 
 - **Booking statuses**: `PENDING_PAYMENT` → `CONFIRMED` | `PAYMENT_FAILED` | `CANCELLED`
-- **UNIQUE constraint** on `(studentId, trialClassId)` prevents duplicates at DB level
+- **Partial unique index** on `(studentId, trialClassId)` WHERE `status = 'CONFIRMED'` prevents duplicate confirmed bookings at DB level
 
 ### Last-Seat Race Condition
 
@@ -127,11 +127,15 @@ When `processPayment(bookingId, false)` is called:
 |--------|----------|-------------|
 | GET | `/api/classes` | List available classes with seat counts |
 | GET | `/api/classes/:id` | Class detail with roster |
-| GET | `/api/classes/:id/roster` | Admin roster (confirmed only) |
+| GET | `/api/admin/classes` | ALL classes including full |
+| GET | `/api/classes/:id/roster` | All non-cancelled bookings |
+| POST | `/api/classes/:id/reset` | Cancel all bookings, reset class |
+| POST | `/api/classes/:id/simulate` | Fill class with scenario |
 | GET | `/api/parents` | List all parents |
 | GET | `/api/parents/:id/students` | Students for a parent |
 | POST | `/api/bookings` | Create a booking `{ studentId, classId }` |
 | GET | `/api/bookings/:id` | Booking status + payment history |
+| GET | `/api/students/:id/pending-bookings` | Unpaid bookings for a student (deduplicated by class) |
 | POST | `/api/bookings/:id/pay` | Process payment `{ success: boolean }` |
 
 ## What I Deliberately Cut

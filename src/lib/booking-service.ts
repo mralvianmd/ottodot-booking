@@ -312,6 +312,7 @@ export async function getBookingStatus(
 
 /**
  * Returns all non-cancelled bookings for a class (admin/teacher roster view).
+ * Deduplicates by student — only the latest booking per student is shown.
  */
 export async function getClassRoster(classId: string): Promise<RosterEntry[]> {
   const cls = await prisma.trialClass.findUnique({
@@ -327,14 +328,23 @@ export async function getClassRoster(classId: string): Promise<RosterEntry[]> {
     include: {
       student: { include: { parent: true } },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
   });
 
-  return bookings.map((b) => ({
-    bookingId: b.id,
-    studentName: b.student.name,
-    parentName: b.student.parent.name,
-    bookedAt: b.createdAt,
-    status: b.status,
-  }));
+  // Deduplicate by student — keep only the latest booking per student
+  const seen = new Set<string>();
+  const unique: RosterEntry[] = [];
+  for (const b of bookings) {
+    if (seen.has(b.studentId)) continue;
+    seen.add(b.studentId);
+    unique.push({
+      bookingId: b.id,
+      studentName: b.student.name,
+      parentName: b.student.parent.name,
+      bookedAt: b.createdAt,
+      status: b.status,
+    });
+  }
+
+  return unique.reverse(); // oldest first
 }
